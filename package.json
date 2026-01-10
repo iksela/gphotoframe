@@ -1,0 +1,23 @@
+{
+  "name": "gphotoframe",
+  "version": "1.0.0",
+  "description": "Google Photos Frame - Display photos from scraped Google Photos albums",
+  "main": "server.js",
+  "scripts": {
+    "parse": "node parse_photos.js",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "google-photos",
+    "photo-frame",
+    "raspberry-pi"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.6.0",
+    "cli-progress": "^3.12.0"
+  }
+}

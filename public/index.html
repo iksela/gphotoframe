@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Photos Frame</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="slideshow-container">
+        <!-- Images will be injected here -->
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <div id="controls" class="hidden">
+        <button id="prev-btn" aria-label="Previous photo">←</button>
+        <button id="pause-btn" aria-label="Pause slideshow">❚❚</button>
+        <button id="next-btn" aria-label="Next photo">→</button>
+    </div>
+
+    <div id="info-overlay">
+        <!-- Clock removed -->
+        <div id="photo-date"></div>
+    </div>
+
+    <!-- Background music (optional, currently disabled) -->
+    <!-- <audio id="bg-music" loop>
+        <source src="music.mp3" type="audio/mpeg">
+    </audio> -->
+
+    <script src="app.js"></script>
+</body>
+
+</html>
