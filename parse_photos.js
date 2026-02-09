@@ -564,6 +564,7 @@ async function syncPhotos(customSources = null) {
 
 // Check if run directly
 if (require.main === module) {
+    require('./logger').patch();
     const inputSources = args.filter(arg => !arg.startsWith('-'));
     syncPhotos(inputSources.length > 0 ? inputSources : null).catch(err => {
         console.error('\n❌ Fatal Error:', err.message);
