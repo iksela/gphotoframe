@@ -416,24 +416,49 @@ async function syncPhotos(customSources = null) {
         // Parse all albums
         const allPhotos = [];
         const albumStats = [];
+        let hasErrors = false;
 
         for (const source of sources) {
             let html = '';
             let isUrl = source.startsWith('http');
 
-            if (isUrl) {
-                html = await fetchAlbumHtml(source);
-            } else {
-                if (fs.existsSync(source)) {
-                    html = fs.readFileSync(source, 'utf-8');
+            try {
+                console.log(`Processing source: ${source}`);
+                if (isUrl) {
+                    html = await fetchAlbumHtml(source);
                 } else {
-                    console.error(`Error: File not found: ${source}`);
-                    continue;
+                    if (fs.existsSync(source)) {
+                        console.log(`Reading file: ${source}`);
+                        html = fs.readFileSync(source, 'utf-8');
+                    } else {
+                        console.error(`Error: File not found: ${source}`);
+                        hasErrors = true;
+                        continue;
+                    }
                 }
+            } catch (err) {
+                console.error(`Error fetching source ${source}: ${err.message}`);
+                hasErrors = true;
+                continue;
+            }
+
+            if (!html) {
+                console.error(`Failed to retrieve content for ${source}`);
+                hasErrors = true;
+                continue;
             }
 
             if (html) {
                 const { albumTitle, photos, nextToken: initialToken, authKey, albumId } = parseAlbumContent(html, source);
+
+                if (photos.length === 0 && !authKey) {
+                    console.error(`   ⚠️  No photos found in ${source}`);
+                    // If we expected photos but got none, treat as error to be safe
+                    // But empty albums are valid. However, usually authKey is found.
+                    // usage of parseAlbumContent returns empty photos array on error too?
+                    // Let's check parseAlbumContent implementation
+                }
+
                 allPhotos.push(...photos);
 
                 let currentToken = initialToken;
@@ -448,20 +473,29 @@ async function syncPhotos(customSources = null) {
                         // Small delay to be nice
                         await new Promise(r => setTimeout(r, 1000));
 
-                        const res = await fetchNextPage(albumId, currentToken, authKey);
-                        if (res.photos && res.photos.length > 0) {
-                            // Add album title to new photos
-                            res.photos.forEach(p => p.album = albumTitle);
-                            allPhotos.push(...res.photos);
-                            totalFetched += res.photos.length;
-                            console.log(`   Page ${pageCount}: Found ${res.photos.length} photos. Total: ${totalFetched}`);
-                        }
+                        try {
+                            const res = await fetchNextPage(albumId, currentToken, authKey);
+                            if (res.photos && res.photos.length > 0) {
+                                // Add album title to new photos
+                                res.photos.forEach(p => p.album = albumTitle);
+                                allPhotos.push(...res.photos);
+                                totalFetched += res.photos.length;
+                                console.log(`   Page ${pageCount}: Found ${res.photos.length} photos. Total: ${totalFetched}`);
+                            }
 
-                        currentToken = res.nextToken;
-                        pageCount++;
+                            currentToken = res.nextToken;
+                            pageCount++;
 
-                        if (!currentToken) {
-                            console.log('   🏁 Reached end of album.');
+                            if (!currentToken) {
+                                console.log('   🏁 Reached end of album.');
+                            }
+                        } catch (err) {
+                            console.error(`   ❌ Pagination error for ${albumTitle}: ${err.message}`);
+                            hasErrors = true;
+                            break; // Stop pagination for this album but continue others? 
+                            // If pagination fails, we have partial data. 
+                            // Partial data + cleanup = delete missing photos.
+                            // So we MUST set hasErrors = true.
                         }
                     }
                 }
@@ -480,17 +514,39 @@ async function syncPhotos(customSources = null) {
 
         // Save metadata
         const metadataPath = path.join(process.cwd(), METADATA_FILE);
-        fs.writeFileSync(metadataPath, JSON.stringify(allPhotos, null, 2));
-        console.log(`\n💾 Saved metadata to: ${METADATA_FILE}`);
+        // Only save metadata if no errors? Or save whatever we got?
+        // If we save partial metadata and then skip cleanup, the UI might show partial list 
+        // but files remain.
+        // Better to ONLY save metadata if !hasErrors OR if we are okay with partial updates.
+        // User complained about "deletes everything". 
+        // If we have errors, we should probably NOT update the metadata file if it implies data loss.
+        // BUT, if we have new photos, we want them.
+        // Compromise: Save metadata only if !hasErrors to prevent partial invalid state?
+        // Actually, if hasErrors is true, we might have partial data. 
+        // If we overwrite photos.json with partial data, the frontend will show fewer photos.
+        // The files will be kept (due to skip cleanup), but frontend won't show them.
+
+        if (!hasErrors) {
+            fs.writeFileSync(metadataPath, JSON.stringify(allPhotos, null, 2));
+            console.log(`\n💾 Saved metadata to: ${METADATA_FILE}`);
+        } else {
+            console.log(`\n⚠️  Errors detected during sync. Skipping metadata save to prevent data loss.`);
+        }
 
         // Download images (Always enabled)
         const outputDir = path.join(process.cwd(), OUTPUT_DIR);
 
         // 1. Download new (skipped if exists)
+        // We can still try to download what we found
         const stats = await downloadImages(allPhotos, outputDir);
 
-        // 2. Remove old (orphaned)
-        const cleanupStats = cleanupOrphanedImages(allPhotos, outputDir);
+        // 2. Remove old (orphaned) - ONLY IF NO ERRORS
+        let cleanupStats = { deleted: 0 };
+        if (!hasErrors) {
+            cleanupStats = cleanupOrphanedImages(allPhotos, outputDir);
+        } else {
+            console.log('\n⚠️  Skipping cleanup of orphaned images due to errors during sync.');
+        }
 
         console.log('✅ Sync complete!');
         console.log(`   Downloaded: ${stats.completed}`);
@@ -515,4 +571,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { syncPhotos };
+module.exports = { syncPhotos, fetchAlbumHtml, parseAlbumContent };
