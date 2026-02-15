@@ -24,6 +24,21 @@ const shouldDownload = true; // Always download as per user request
 let inputSources = args.filter(arg => !arg.startsWith('-'));
 
 /**
+ * Check if a Google Photos item is a video
+ */
+function isItemVideo(item) {
+    // Check for the known video metadata key '76647426'
+    if (item && item[9] && item[9].hasOwnProperty('76647426')) {
+        return true;
+    }
+    // Fallback: sometimes info[9][2] indicates type (3 = video, 1 = photo)
+    if (item && item[1] && Array.isArray(item[1]) && item[1][9]) {
+        if (item[1][9][2] === 3) return true;
+    }
+    return false;
+}
+
+/**
  * Fetch HTML content from a URL
  */
 async function fetchAlbumHtml(url) {
@@ -149,6 +164,12 @@ async function fetchNextPage(albumId, token, key) {
 
         photoData.forEach(item => {
             if (Array.isArray(item) && item.length >= 2) {
+                // Skip videos
+                if (isItemVideo(item)) {
+                    console.log(`   ⏭️  Skipping video item: ${item[0]}`);
+                    return;
+                }
+
                 const photoId = item[0];
                 const photoInfo = item[1];
                 if (Array.isArray(photoInfo) && photoInfo.length >= 3) {
@@ -232,6 +253,12 @@ function parseAlbumContent(html, sourceName) {
         if (photoData && photoData[1] && Array.isArray(photoData[1])) {
             photoData[1].forEach((item) => {
                 if (Array.isArray(item) && item.length >= 2) {
+                    // Skip videos
+                    if (isItemVideo(item)) {
+                        console.log(`   ⏭️  Skipping video item: ${item[0]}`);
+                        return;
+                    }
+
                     const photoId = item[0];
                     const photoInfo = item[1];
 
